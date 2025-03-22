@@ -8,16 +8,44 @@ export interface Message {
   timestamp: string;
 }
 
+// Simple sanitization for user input
+export function sanitizeInput(text: string): string {
+  // Remove excessive spaces
+  let sanitized = text.replace(/\s+/g, ' ').trim();
+  
+  // Remove common filler words
+  const fillerWords = ['um', 'uh', 'like', 'you know', 'sort of', 'kind of'];
+  fillerWords.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    sanitized = sanitized.replace(regex, '');
+  });
+  
+  // Clean up multiple spaces that might have resulted from removing words
+  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+  
+  // Ensure the first letter is capitalized and ends with proper punctuation
+  if (sanitized.length > 0) {
+    sanitized = sanitized.charAt(0).toUpperCase() + sanitized.slice(1);
+    if (!/[.!?]$/.test(sanitized)) {
+      sanitized += '.';
+    }
+  }
+  
+  return sanitized;
+}
+
 export function useMessages() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Add a new message
   const addMessage = useCallback((role: 'user' | 'assistant', content: string) => {
+    const sanitizedContent = role === 'user' ? sanitizeInput(content) : content;
+    
     const newMessage: Message = {
       id: Date.now().toString(),
       role,
-      content,
+      content: sanitizedContent,
       timestamp: new Date().toISOString(),
     };
     
@@ -56,6 +84,16 @@ export function useMessages() {
 export function useVoiceInput() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [language, setLanguage] = useState('en-US');
+  const [supportedLanguages, setSupportedLanguages] = useState<{code: string, name: string}[]>([
+    { code: 'en-US', name: 'English (US)' },
+    { code: 'es-ES', name: 'Spanish' },
+    { code: 'fr-FR', name: 'French' },
+    { code: 'de-DE', name: 'German' },
+    { code: 'it-IT', name: 'Italian' },
+    { code: 'ja-JP', name: 'Japanese' },
+    { code: 'zh-CN', name: 'Chinese (Simplified)' },
+  ]);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const startListening = useCallback(() => {
@@ -75,6 +113,7 @@ export function useVoiceInput() {
     
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = language;
     
     recognitionRef.current.onstart = () => {
       setIsListening(true);
@@ -98,7 +137,7 @@ export function useVoiceInput() {
     };
     
     recognitionRef.current.start();
-  }, []);
+  }, [language]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -106,6 +145,15 @@ export function useVoiceInput() {
       setIsListening(false);
     }
   }, []);
+  
+  const changeLanguage = useCallback((langCode: string) => {
+    setLanguage(langCode);
+    // If currently listening, restart with new language
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setTimeout(() => startListening(), 100);
+    }
+  }, [isListening, startListening]);
 
   useEffect(() => {
     return () => {
@@ -120,6 +168,9 @@ export function useVoiceInput() {
     transcript,
     startListening,
     stopListening,
+    language,
+    changeLanguage,
+    supportedLanguages
   };
 }
 
@@ -131,4 +182,58 @@ export function useVoiceToggle() {
   }, []);
 
   return { voiceEnabled, toggleVoice };
+}
+
+// Text suggestions functionality
+export function useTextSuggestions() {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isChecking, setIsChecking] = useState(false);
+
+  const checkText = useCallback((text: string) => {
+    if (!text.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    
+    setIsChecking(true);
+    
+    // For a real implementation, this would call a spell check API
+    // For now, we'll simulate some suggestions based on the last word
+    const words = text.split(' ');
+    const lastWord = words[words.length - 1].toLowerCase();
+    
+    // Simulate some suggestions based on common words
+    const possibleSuggestions: Record<string, string[]> = {
+      'h': ['hello', 'how', 'help'],
+      'wh': ['what', 'where', 'when', 'why'],
+      'c': ['can', 'could', 'computer'],
+      't': ['the', 'that', 'there', 'they'],
+    };
+    
+    const firstChar = lastWord.charAt(0);
+    const secondChar = lastWord.length > 1 ? lastWord.charAt(1) : '';
+    const key = firstChar + (secondChar || '');
+    
+    setTimeout(() => {
+      if (key in possibleSuggestions) {
+        setSuggestions(possibleSuggestions[key].filter(s => 
+          s.startsWith(lastWord) && s !== lastWord
+        ));
+      } else if (firstChar in possibleSuggestions) {
+        setSuggestions(possibleSuggestions[firstChar].filter(s => 
+          s.startsWith(lastWord) && s !== lastWord
+        ));
+      } else {
+        setSuggestions([]);
+      }
+      setIsChecking(false);
+    }, 300);
+  }, []);
+
+  return {
+    suggestions,
+    isChecking,
+    checkText,
+    clearSuggestions: () => setSuggestions([])
+  };
 }

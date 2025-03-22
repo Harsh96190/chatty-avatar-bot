@@ -1,6 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send } from 'lucide-react';
+import { Mic, MicOff, Send, Globe } from 'lucide-react';
+import { useTextSuggestions } from '../lib/hooks';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -10,6 +17,9 @@ interface ChatInputProps {
   onStartListening: () => void;
   onStopListening: () => void;
   voiceEnabled: boolean;
+  language?: string;
+  onChangeLanguage?: (lang: string) => void;
+  supportedLanguages?: {code: string, name: string}[];
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -20,16 +30,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onStartListening,
   onStopListening,
   voiceEnabled,
+  language = 'en-US',
+  onChangeLanguage,
+  supportedLanguages = [],
 }) => {
   const [message, setMessage] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { suggestions, checkText, clearSuggestions } = useTextSuggestions();
 
   // Update the message state with the transcript when it changes
   useEffect(() => {
     if (transcript) {
       setMessage(transcript);
+      // Check for suggestions on transcript change
+      checkText(transcript);
     }
-  }, [transcript]);
+  }, [transcript, checkText]);
 
   // Auto-resize the textarea
   useEffect(() => {
@@ -45,6 +61,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (message.trim() && !isLoading) {
       onSendMessage(message);
       setMessage('');
+      clearSuggestions();
       
       // If voice was enabled, stop listening
       if (isListening) {
@@ -74,14 +91,46 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    checkText(e.target.value);
+  };
+
+  const applySuggestion = (suggestion: string) => {
+    const words = message.split(' ');
+    words[words.length - 1] = suggestion;
+    const newMessage = words.join(' ');
+    setMessage(newMessage);
+    clearSuggestions();
+    
+    // Focus back on input
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="p-4 border-t border-border">
-      <div className="relative flex items-center">
+    <div className="p-4 border-t border-border">
+      {suggestions.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {suggestions.map((suggestion, index) => (
+            <button
+              key={index}
+              onClick={() => applySuggestion(suggestion)}
+              className="px-2 py-1 text-xs rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="relative flex items-center">
         <div className="relative flex-1">
           <textarea
             ref={inputRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Type your message..."
             disabled={isLoading}
@@ -98,21 +147,47 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </div>
         
         {voiceEnabled && (
-          <button
-            type="button"
-            onClick={toggleListening}
-            disabled={isLoading}
-            className={`ml-2 p-3 rounded-full transition-all ${
-              isListening 
-                ? 'bg-destructive text-white mic-pulse' 
-                : 'bg-secondary/80 text-muted-foreground hover:bg-secondary'
-            }`}
-          >
-            {isListening ? <Mic size={18} /> : <MicOff size={18} />}
-          </button>
+          <>
+            {supportedLanguages.length > 0 && onChangeLanguage && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="ml-2 p-3 rounded-full bg-secondary/80 text-muted-foreground hover:bg-secondary transition-all"
+                  >
+                    <Globe size={18} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {supportedLanguages.map((lang) => (
+                    <DropdownMenuItem 
+                      key={lang.code}
+                      onClick={() => onChangeLanguage(lang.code)}
+                      className={lang.code === language ? "bg-muted" : ""}
+                    >
+                      {lang.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            <button
+              type="button"
+              onClick={toggleListening}
+              disabled={isLoading}
+              className={`ml-2 p-3 rounded-full transition-all ${
+                isListening 
+                  ? 'bg-destructive text-white mic-pulse' 
+                  : 'bg-secondary/80 text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              {isListening ? <Mic size={18} /> : <MicOff size={18} />}
+            </button>
+          </>
         )}
-      </div>
-    </form>
+      </form>
+    </div>
   );
 };
 

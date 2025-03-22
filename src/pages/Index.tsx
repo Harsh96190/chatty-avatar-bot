@@ -10,7 +10,15 @@ import { DEFAULT_MESSAGES } from '../lib/constants';
 
 const Index = () => {
   const { messages, setMessages, processMessage, isLoading } = useMessages();
-  const { isListening, transcript, startListening, stopListening } = useVoiceInput();
+  const { 
+    isListening, 
+    transcript, 
+    startListening, 
+    stopListening, 
+    language, 
+    changeLanguage, 
+    supportedLanguages 
+  } = useVoiceInput();
   const { voiceEnabled, toggleVoice } = useVoiceToggle();
 
   // Load default messages on mount
@@ -39,7 +47,7 @@ const Index = () => {
             
             <ThinkingIndicator isThinking={isLoading} />
             
-            <div className="mt-6 w-full">
+            <div className="mt-6 w-full space-y-3">
               <ToggleSwitch 
                 enabled={voiceEnabled} 
                 onToggle={toggleVoice} 
@@ -65,6 +73,9 @@ const Index = () => {
             onStartListening={startListening}
             onStopListening={stopListening}
             voiceEnabled={voiceEnabled}
+            language={language}
+            onChangeLanguage={changeLanguage}
+            supportedLanguages={supportedLanguages}
           />
         </div>
       </div>
