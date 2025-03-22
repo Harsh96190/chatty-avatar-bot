@@ -61,8 +61,9 @@ serve(async (req) => {
       throw new Error("Gemini API key not configured");
     }
 
+    // Use the Gemini 1.5 Pro model as suggested
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`,
       {
         method: "POST",
         headers: {
@@ -86,6 +87,10 @@ serve(async (req) => {
         }),
       }
     );
+
+    if (!geminiResponse.ok) {
+      throw new Error(`Gemini API error: ${await geminiResponse.text()}`);
+    }
 
     const geminiData = await geminiResponse.json();
     

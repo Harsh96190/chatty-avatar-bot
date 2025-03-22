@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/use-toast';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface VoiceInputProps {
   isListening: boolean;
@@ -28,6 +29,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   supportedLanguages,
 }) => {
   const [isSupported, setIsSupported] = useState(true);
+  const [hasNetworkError, setHasNetworkError] = useState(false);
 
   useEffect(() => {
     // Check if speech recognition is supported
@@ -41,6 +43,13 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     }
   }, []);
 
+  // Reset network error state when user attempts to start listening again
+  useEffect(() => {
+    if (isListening) {
+      setHasNetworkError(false);
+    }
+  }, [isListening]);
+
   const toggleListening = () => {
     if (!isSupported) {
       toast({
@@ -51,11 +60,26 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       return;
     }
 
+    if (hasNetworkError) {
+      // Try to recover from network error
+      setHasNetworkError(false);
+    }
+
     if (isListening) {
       onStopListening();
     } else {
       onStartListening();
     }
+  };
+
+  const handleNetworkError = () => {
+    setHasNetworkError(true);
+    toast({
+      title: "Network Error",
+      description: "There was a problem connecting to the speech recognition service. Check your internet connection and try again.",
+      variant: "destructive",
+    });
+    onStopListening();
   };
 
   return (
@@ -86,13 +110,13 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
 
       <Button
         onClick={toggleListening}
-        variant={isListening ? "destructive" : "outline"}
+        variant={isListening ? "destructive" : hasNetworkError ? "destructive" : "outline"}
         size="icon"
         className={`relative ${
           isListening ? "animate-pulse" : ""
-        } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
+        } ${!isSupported || hasNetworkError ? "opacity-80 hover:opacity-100" : ""}`}
         disabled={!isSupported}
-        title={isListening ? "Stop listening" : "Start listening"}
+        title={isListening ? "Stop listening" : hasNetworkError ? "Network error, try again" : "Start listening"}
       >
         {isListening ? (
           <MicOff size={16} />
@@ -101,6 +125,9 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
         )}
         {isListening && (
           <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+        )}
+        {hasNetworkError && !isListening && (
+          <span className="absolute bottom-0 right-0 w-2 h-2 bg-yellow-500 rounded-full"></span>
         )}
       </Button>
     </div>

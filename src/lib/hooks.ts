@@ -86,6 +86,10 @@ export function useMessages() {
         return;
       }
       
+      if (!data || !data.answer) {
+        throw new Error("Invalid response from assistant");
+      }
+      
       // Add assistant response with source information
       addMessage('assistant', data.answer, data.source);
       
@@ -120,6 +124,7 @@ export function useVoiceInput() {
     { code: 'zh-CN', name: 'Chinese (Simplified)' },
   ]);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [networkError, setNetworkError] = useState(false);
 
   const startListening = useCallback(() => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -132,11 +137,20 @@ export function useVoiceInput() {
       return;
     }
 
+    // Reset any existing network error state
+    setNetworkError(false);
+
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (!SpeechRecognitionAPI) {
       console.error('Speech recognition not supported');
       return;
+    }
+    
+    // Clean up any existing instance
+    if (recognitionRef.current) {
+      recognitionRef.current.abort();
+      recognitionRef.current = null;
     }
     
     recognitionRef.current = new SpeechRecognitionAPI();
@@ -147,7 +161,6 @@ export function useVoiceInput() {
     
     recognitionRef.current.onstart = () => {
       setIsListening(true);
-      setTranscript('');
     };
     
     recognitionRef.current.onresult = (event) => {
@@ -159,11 +172,22 @@ export function useVoiceInput() {
     
     recognitionRef.current.onerror = (event) => {
       console.error('Speech recognition error', event.error);
-      toast({
-        title: "Speech Recognition Error",
-        description: `Error: ${event.error}. Please try again.`,
-        variant: "destructive",
-      });
+      
+      if (event.error === 'network') {
+        setNetworkError(true);
+        toast({
+          title: "Network Error",
+          description: "There was a problem connecting to the speech recognition service. Check your internet connection and try again.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Speech Recognition Error",
+          description: `Error: ${event.error}. Please try again.`,
+          variant: "destructive",
+        });
+      }
+      
       stopListening();
     };
     
@@ -171,18 +195,38 @@ export function useVoiceInput() {
       setIsListening(false);
     };
     
-    recognitionRef.current.start();
-    
-    toast({
-      title: "Listening...",
-      description: "Speak now. Click the mic button again to stop.",
-    });
+    try {
+      recognitionRef.current.start();
+      
+      toast({
+        title: "Listening...",
+        description: "Speak now. Click the mic button again to stop.",
+      });
+    } catch (err) {
+      console.error('Error starting speech recognition:', err);
+      toast({
+        title: "Error Starting Speech Recognition",
+        description: "There was a problem starting the speech recognition service. Please try again.",
+        variant: "destructive",
+      });
+      setIsListening(false);
+    }
     
   }, [language]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {
+        console.error('Error stopping speech recognition:', err);
+        // Try to abort instead
+        try {
+          recognitionRef.current.abort();
+        } catch (abortErr) {
+          console.error('Error aborting speech recognition:', abortErr);
+        }
+      }
       setIsListening(false);
     }
   }, []);
@@ -205,7 +249,11 @@ export function useVoiceInput() {
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch (err) {
+          console.error('Error cleaning up speech recognition:', err);
+        }
       }
     };
   }, []);
@@ -217,7 +265,8 @@ export function useVoiceInput() {
     stopListening,
     language,
     changeLanguage,
-    supportedLanguages
+    supportedLanguages,
+    networkError,
   };
 }
 
