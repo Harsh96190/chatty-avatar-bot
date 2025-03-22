@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
@@ -125,6 +124,11 @@ export function useVoiceInput() {
   const startListening = useCallback(() => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       console.error('Speech recognition not supported');
+      toast({
+        title: "Speech Recognition Not Supported",
+        description: "Your browser doesn't support speech recognition functionality.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -155,6 +159,11 @@ export function useVoiceInput() {
     
     recognitionRef.current.onerror = (event) => {
       console.error('Speech recognition error', event.error);
+      toast({
+        title: "Speech Recognition Error",
+        description: `Error: ${event.error}. Please try again.`,
+        variant: "destructive",
+      });
       stopListening();
     };
     
@@ -163,6 +172,12 @@ export function useVoiceInput() {
     };
     
     recognitionRef.current.start();
+    
+    toast({
+      title: "Listening...",
+      description: "Speak now. Click the mic button again to stop.",
+    });
+    
   }, [language]);
 
   const stopListening = useCallback(() => {
@@ -179,7 +194,13 @@ export function useVoiceInput() {
       recognitionRef.current.stop();
       setTimeout(() => startListening(), 100);
     }
-  }, [isListening, startListening]);
+    
+    toast({
+      title: "Language Changed",
+      description: `Now using ${supportedLanguages.find(l => l.code === langCode)?.name || langCode}`,
+    });
+    
+  }, [isListening, startListening, supportedLanguages]);
 
   useEffect(() => {
     return () => {
