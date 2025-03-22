@@ -1,11 +1,14 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  source?: 'knowledge_base' | 'gemini';
 }
 
 // Simple sanitization for user input
@@ -39,7 +42,7 @@ export function useMessages() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Add a new message
-  const addMessage = useCallback((role: 'user' | 'assistant', content: string) => {
+  const addMessage = useCallback((role: 'user' | 'assistant', content: string, source?: 'knowledge_base' | 'gemini') => {
     const sanitizedContent = role === 'user' ? sanitizeInput(content) : content;
     
     const newMessage: Message = {
@@ -47,6 +50,7 @@ export function useMessages() {
       role,
       content: sanitizedContent,
       timestamp: new Date().toISOString(),
+      source
     };
     
     setMessages((prev) => [...prev, newMessage]);
@@ -54,22 +58,44 @@ export function useMessages() {
   }, []);
 
   // Process a user message and generate a response
-  const processMessage = useCallback(async (content: string) => {
+  const processMessage = useCallback(async (content: string, language: string = 'en-US') => {
     if (!content.trim()) return;
     
     // Add user message
     addMessage('user', content);
     
-    // Simulate assistant thinking
+    // Set assistant thinking
     setIsLoading(true);
     
-    // Simulate API delay
-    setTimeout(() => {
-      // Example response - in a real app, this would call an API
-      const responseContent = `I understand you're asking about "${content}". This is a simulated response as we haven't connected to a real API yet.`;
-      addMessage('assistant', responseContent);
+    try {
+      // Call our API function
+      const { data, error } = await supabase.functions.invoke('query-assistant', {
+        body: {
+          query: content,
+          language
+        }
+      });
+      
+      if (error) {
+        console.error('Error querying assistant:', error);
+        toast({
+          title: "An error occurred",
+          description: error.message || "Failed to process your message",
+          variant: "destructive",
+        });
+        addMessage('assistant', "I'm sorry, I encountered an error while processing your request. Please try again later.");
+        return;
+      }
+      
+      // Add assistant response with source information
+      addMessage('assistant', data.answer, data.source);
+      
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      addMessage('assistant', "I'm sorry, something went wrong. Please try again later.");
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   }, [addMessage]);
 
   return {
